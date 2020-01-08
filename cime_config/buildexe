@@ -40,12 +40,12 @@ def _main_func():
         atm_model = case.get_value("COMP_ATM")
         gmake_args = get_standard_makefile_args(case)
 
-    if ocn_model == 'mom' or atm_model == "fv3gfs":
+    if ocn_model == 'mom' or atm_model == "ufsatm":
         gmake_args += "USE_FMS=TRUE"
 
     ncep_libs = os.environ.get("NCEP_LIBS")
     if ncep_libs is not None:
-        if atm_model == "fv3gfs":
+        if atm_model == "ufsatm":
             gmake_args += " USER_SLIBS=\"-L{} {}\" ".format(os.path.join(ncep_libs,"lib"), "-lnemsio -lbacio -lsp -lw3emc -lw3nco")
 
     comp_classes = case.get_values("COMP_CLASSES")
