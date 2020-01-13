@@ -1723,9 +1723,10 @@
     <desc>
       The root directory of initial conditions for ufsatm.
       This is usually a shared disk area but can be set to
-      a local area indepent of DIN_LOC_ROOT
+      a local area independent of DIN_LOC_ROOT
       Default values for the target machine are in the
       $CIMEROOT/machines/config_machines.xml
+      WARNING: The final directory in this path must be "prod".
     </desc>
   </entry>
 
