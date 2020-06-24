@@ -43,12 +43,15 @@ def _main_func():
     if ocn_model == 'mom' or atm_model == "ufsatm":
         gmake_args += "USE_FMS=TRUE"
 
+    gmake_args += " --debug "
+
     ncep_libs = os.environ.get("NCEP_LIBS")
     if ncep_libs is not None:
         if atm_model == "ufsatm":
             gmake_args += " USER_SLIBS=\"-L{} {}\" ".format(os.path.join(ncep_libs,"lib"), "-lnemsio -lbacio -lsp -lw3emc -lw3nco")
 
     comp_classes = case.get_values("COMP_CLASSES")
+    print ("HERE COMP_CLASSES are {}".format(comp_classes))
     if not "CPL" in comp_classes:
         #in this case NEMS.exe should already be built
         safe_copy(os.path.join(exeroot,"atm","obj","NEMS.exe"),os.path.join(exeroot,"ufs.exe"))
