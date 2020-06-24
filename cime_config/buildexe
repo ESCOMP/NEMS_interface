@@ -8,7 +8,10 @@ import sys, os
 
 _CIMEROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..","..","..","..")
 if not os.path.basename(_CIMEROOT)=="cime":
-    _CIMEROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..","..","..","..","..","cime")
+    _CIMEROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..","..","..","..","..","cime"))
+if not os.path.isdir(_CIMEROOT):
+    _CIMEROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..","..","..","..","..","..","cime"))
+
 sys.path.append(os.path.join(_CIMEROOT, "scripts", "Tools"))
 
 from standard_script_setup import *
