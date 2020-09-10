@@ -47,10 +47,28 @@ def _main_func():
 
     gmake_args += " --debug "
 
-    ncep_libs = os.environ.get("NCEP_LIBS")
-    if ncep_libs is not None:
-        if atm_model == "ufsatm":
-            gmake_args += " USER_SLIBS=\"-L{} {}\" ".format(os.path.join(ncep_libs,"lib"), "-lnemsio -lbacio -lsp -lw3emc -lw3nco")
+#    ncep_libs = os.environ.get("NCEP_LIBS")
+#    if ncep_libs is not None:
+    if atm_model == "ufsatm":
+#            gmake_args += " USER_SLIBS=\"-L{} {}\" ".format(os.path.join(ncep_libs,"lib"), "-lnemsio -lbacio -lsp -lw3emc -lw3nco")
+        gmake_args += " USER_INCLDIR=-I{} ".format(os.path.join(exeroot,"atm","obj","FV3","mod"))
+        gmake_args += "USER_SLIBS=\""
+        gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","FV3")," -lfv3atm -lfv3dycore ")
+        gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","FV3","cpl")," -lcpl ")
+        gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","FV3","io")," -lio ")
+        gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","FV3","ipd")," -lipd ")
+        gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","FV3","gfsphysics")," -lgfsphysics ")
+        gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","FV3","stochastic_physics")," -lstochastic_physics_wrapper ")
+        gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","stochastic_physics")," -lstochastic_physics ")
+        gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","FV3","ccpp","driver")," -lccppdriver ")
+        gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","FV3","ccpp","physics")," -lccppphys ")
+        gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","FV3","ccpp","framework","src")," -lccpp ")
+        gmake_args +=     os.environ.get("NEMSIO_LIB")
+        gmake_args += " "+os.environ.get("BACIO_LIB4")
+        gmake_args += " "+os.environ.get("W3EMC_LIBd")
+        gmake_args += " "+os.environ.get("W3NCO_LIBd")
+        gmake_args += " "+os.environ.get("SP_LIBd")
+        gmake_args += "\""
 
     comp_classes = case.get_values("COMP_CLASSES")
     if not "CPL" in comp_classes:
