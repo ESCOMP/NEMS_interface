@@ -4,7 +4,7 @@
 build model executable
 """
 
-import sys, os
+import sys, os, glob
 
 _CIMEROOT = os.environ.get("CIMEROOT")
 if _CIMEROOT is None:
@@ -17,7 +17,7 @@ from standard_script_setup import *
 from CIME.buildlib         import parse_input
 from CIME.build            import get_standard_makefile_args
 from CIME.case             import Case
-from CIME.utils            import expect, run_cmd, safe_copy
+from CIME.utils            import expect, run_cmd, safe_copy, symlink_force
 
 #pylint: disable=undefined-variable
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ def _main_func():
     with Case(caseroot) as case:
         # Retrieve variables
         casetools = case.get_value("CASETOOLS")
-        cimeroot  = case.get_value("CIMEROOT")
+        srcroot  = case.get_value("SRCROOT")
         exeroot   = case.get_value("EXEROOT")
         gmake     = case.get_value("GMAKE")
         gmake_j   = case.get_value("GMAKE_J")
@@ -46,12 +46,10 @@ def _main_func():
     if ocn_model == 'mom' or atm_model == "ufsatm":
         gmake_args += "USE_FMS=TRUE"
 
-    gmake_args += " --debug "
-
-#    ncep_libs = os.environ.get("NCEP_LIBS")
-#    if ncep_libs is not None:
+    #    ncep_libs = os.environ.get("NCEP_LIBS")
+    #    if ncep_libs is not None:
     if atm_model == "ufsatm":
-#            gmake_args += " USER_SLIBS=\"-L{} {}\" ".format(os.path.join(ncep_libs,"lib"), "-lnemsio -lbacio -lsp -lw3emc -lw3nco")
+        #            gmake_args += " USER_SLIBS=\"-L{} {}\" ".format(os.path.join(ncep_libs,"lib"), "-lnemsio -lbacio -lsp -lw3emc -lw3nco")
         gmake_args += " USER_INCLDIR=-I{} ".format(os.path.join(exeroot,"atm","obj","FV3","mod"))
         gmake_args += "USER_SLIBS=\""
         gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","FV3")," -lfv3atm -lfv3dycore ")
@@ -89,10 +87,34 @@ def _main_func():
     if not os.path.isdir(bld_root):
         os.makedirs(bld_root)
 
+    nemssrcdir = os.path.join(srcroot, "src", "model", "NEMS", "src") 
     with open(os.path.join(bld_root,'Filepath'), 'w') as out:
         out.write(os.path.join(caseroot, "SourceMods", "src.drv") + "\n")
-        out.write(os.path.join(cimeroot, "src", "model", "NEMS", "src") + "\n")
+        out.write(os.path.join(srcroot,"src","model","CMEPS","mediator")+"\n")
+        out.write(nemssrcdir + "\n")
+        out.write(os.path.join(nemssrcdir,"ENS_Cpl")+"\n")
+    
+    sfiles = glob.glob(nemssrcdir+"/*.F90")
+    sfiles.extend(glob.glob(os.path.join(srcroot,"src","model","CMEPS","mediator")+"/*.F90"))
+    #sfiles.append("nems_c_rusage.c")
+    sfiles.append("ENS_CplComp_ESMFMod_STUB.F90")
+    with open(os.path.join(bld_root,'Srcfiles'), 'w') as out:
+        out.write("nems_c_rusage.c\n")
+        for sfile in sfiles:
+            sfile = os.path.basename(sfile)
+            if not "MEDIATOR" in sfile or "SpaceWeather" in sfile:
+                out.write(sfile+"\n")
 
+    for hfile in glob.iglob(nemssrcdir+"/*.h"):
+        print("Creating link to {}".format(hfile))
+        if "ESMFVersionDefine" in hfile:
+            symlink_force(hfile, os.path.join(bld_root,"ESMFVersionDefine.h"))
+            symlink_force(hfile, os.path.join(bld_root,os.pardir,"ESMFVersionDefine.h"))
+        else:
+            symlink_force(hfile, os.path.join(bld_root,os.path.basename(hfile)))
+            symlink_force(hfile, os.path.join(bld_root,os.pardir,os.path.basename(hfile)))
+
+    
     # Set makefile and exefile paths
     makefile = os.path.join(casetools, "Makefile")
     exename = os.path.join(exeroot, cime_model + ".exe")
@@ -100,15 +122,10 @@ def _main_func():
     # Always relink
     if os.path.isfile(exename):
         os.remove(exename)
-
-    # Generate Srcfiles
-    cmd = "{} Srcfiles -j {} MODEL=driver {} -f {} ".format(gmake, gmake_j, gmake_args, makefile)
-    rc, out, err = run_cmd(cmd)
-
-
+    gmake_args += " USER_CPPDEFS=\"-DCMEPS\""
     # Build model executable
     cmd = "{} exec_se -j {} EXEC_SE={} MODEL=driver {} -f {} ".format(gmake, gmake_j, exename, gmake_args, makefile)
-    rc, out, err = run_cmd(cmd)
+    rc, out, err = run_cmd(cmd, from_dir=bld_root)
     expect(rc==0,"Command {} failed rc={}\nout={}\nerr={}".format(cmd,rc,out,err))
     logger.info(out)
 
