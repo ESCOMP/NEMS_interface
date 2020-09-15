@@ -93,24 +93,10 @@ def _main_func():
         out.write(os.path.join(caseroot, "SourceMods", "src.drv") + "\n")
         out.write(os.path.join(cimeroot, "src", "model", "NEMS", "src") + "\n")
 
-    #comp_root_dir_cpl = case.get_value("COMP_ROOT_DIR_CPL")
-    #print bldroot
-    #with open('Filepath', 'w') as out:
-    #    out.write(os.path.join(caseroot, "SourceMods", "src.drv") + "\n")
-    #    #out.write(os.path.join(comp_root_dir_cpl, "mediator") + "\n")
-    #    #out.write(os.path.join(comp_root_dir_cpl, "drivers", "cime") + "\n")
-    #    out.write(os.path.join(comp_root_dir_cpl, "../src") + "\n")
-
-    # List of source files that will be removed from the Srcfiles
-    remove_files = [ "module_MEDIATOR.F90",
-                     "module_MEDIATOR_methods.F90",
-                     "module_MEDIATOR_SpaceWeather.F90"
-                   ]
-
     # Set makefile and exefile paths
     makefile = os.path.join(casetools, "Makefile")
     exename = os.path.join(exeroot, cime_model + ".exe")
-    
+
     # Always relink
     if os.path.isfile(exename):
         os.remove(exename)
@@ -119,14 +105,6 @@ def _main_func():
     cmd = "{} Srcfiles -j {} MODEL=driver {} -f {} ".format(gmake, gmake_j, gmake_args, makefile)
     rc, out, err = run_cmd(cmd)
 
-    # Remove files from Srcfiles, listed in remove_files, rc is not checked here on purpose beacuse it exits
-    with open(os.path.join(bld_root,"Srcfiles"), "r+") as f:
-        d = f.readlines()
-        f.seek(0)
-        for i in d:
-            if i.rstrip() not in remove_files:
-                f.write(i)
-            f.truncate() 
 
     # Build model executable
     cmd = "{} exec_se -j {} EXEC_SE={} MODEL=driver {} -f {} ".format(gmake, gmake_j, exename, gmake_args, makefile)
