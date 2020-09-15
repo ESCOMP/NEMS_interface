@@ -31,6 +31,7 @@ def _main_func():
     logger.info("Building a single executable version of target model")
 
     with Case(caseroot) as case:
+        # Retrieve variables
         casetools = case.get_value("CASETOOLS")
         cimeroot  = case.get_value("CIMEROOT")
         exeroot   = case.get_value("EXEROOT")
@@ -72,7 +73,7 @@ def _main_func():
 
     comp_classes = case.get_values("COMP_CLASSES")
     if not "CPL" in comp_classes:
-        #in this case NEMS.exe should already be built
+        # In this case NEMS.exe should already be built
         safe_copy(os.path.join(exeroot,"atm","obj","NEMS.exe"),os.path.join(exeroot,"ufs.exe"))
         return
 
@@ -84,24 +85,51 @@ def _main_func():
     gmake_args += " IAC_PRESENT=FALSE"
     expect((num_esp is None) or (int(num_esp) == 1), "ESP component restricted to one instance")
 
-    comp_root_dir_cpl = case.get_value("COMP_ROOT_DIR_CPL")
-    with open('Filepath', 'w') as out:
+    bld_root = os.path.join(exeroot,'cpl','obj')
+    if not os.path.isdir(bld_root):
+        os.makedirs(bld_root)
+
+    with open(os.path.join(bld_root,'Filepath'), 'w') as out:
         out.write(os.path.join(caseroot, "SourceMods", "src.drv") + "\n")
-        out.write(os.path.join(comp_root_dir_cpl, "mediator") + "\n")
-        out.write(os.path.join(comp_root_dir_cpl, "drivers", "cime") + "\n")
+        out.write(os.path.join(cimeroot, "src", "model", "NEMS", "src") + "\n")
 
+    #comp_root_dir_cpl = case.get_value("COMP_ROOT_DIR_CPL")
+    #print bldroot
+    #with open('Filepath', 'w') as out:
+    #    out.write(os.path.join(caseroot, "SourceMods", "src.drv") + "\n")
+    #    #out.write(os.path.join(comp_root_dir_cpl, "mediator") + "\n")
+    #    #out.write(os.path.join(comp_root_dir_cpl, "drivers", "cime") + "\n")
+    #    out.write(os.path.join(comp_root_dir_cpl, "../src") + "\n")
 
-    # build model executable
+    # List of source files that will be removed from the Srcfiles
+    remove_files = [ "module_MEDIATOR.F90",
+                     "module_MEDIATOR_methods.F90",
+                     "module_MEDIATOR_SpaceWeather.F90"
+                   ]
 
+    # Set makefile and exefile paths
     makefile = os.path.join(casetools, "Makefile")
     exename = os.path.join(exeroot, cime_model + ".exe")
-    # always relink
+    
+    # Always relink
     if os.path.isfile(exename):
         os.remove(exename)
 
-    cmd = "{} exec_se -j {} EXEC_SE={} MODEL=driver {} -f {} "\
-        .format(gmake, gmake_j, exename, gmake_args, makefile)
+    # Generate Srcfiles
+    cmd = "{} Srcfiles -j {} MODEL=driver {} -f {} ".format(gmake, gmake_j, gmake_args, makefile)
+    rc, out, err = run_cmd(cmd)
 
+    # Remove files from Srcfiles, listed in remove_files, rc is not checked here on purpose beacuse it exits
+    with open(os.path.join(bld_root,"Srcfiles"), "r+") as f:
+        d = f.readlines()
+        f.seek(0)
+        for i in d:
+            if i.rstrip() not in remove_files:
+                f.write(i)
+            f.truncate() 
+
+    # Build model executable
+    cmd = "{} exec_se -j {} EXEC_SE={} MODEL=driver {} -f {} ".format(gmake, gmake_j, exename, gmake_args, makefile)
     rc, out, err = run_cmd(cmd)
     expect(rc==0,"Command {} failed rc={}\nout={}\nerr={}".format(cmd,rc,out,err))
     logger.info(out)
