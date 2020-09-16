@@ -122,7 +122,7 @@ def _main_func():
     # Always relink
     if os.path.isfile(exename):
         os.remove(exename)
-    gmake_args += " USER_CPPDEFS=\"-DCMEPS\""
+    gmake_args += " USER_CPPDEFS=\"-DCMEPS -DINTERNAL_PIO_INIT -DFRONT_CMEPS=MED -DFRONT_CICE6=ice_comp_nuopc -DFRONT_MOM6=mom_cap_mod -DFRONT_FV3=fv3gfs_cap_mod\""
     # Build model executable
     cmd = "{} exec_se -j {} EXEC_SE={} MODEL=driver {} -f {} ".format(gmake, gmake_j, exename, gmake_args, makefile)
     rc, out, err = run_cmd(cmd, from_dir=bld_root)
