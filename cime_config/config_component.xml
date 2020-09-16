@@ -26,6 +26,15 @@
     <desc>Name of coupling component</desc>
   </entry>
 
+  <entry id="COUPLING_MODE">
+    <type>char</type>
+    <valid_values>cesm,nems_orig_active,nems_orig_data,nems_frac,hafs</valid_values>
+    <default_value>cesm</default_value>
+    <group>run_coupling</group>
+    <file>env_run.xml</file>
+    <desc>coupling mode</desc>
+  </entry>
+
   <!-- ===================================================================== -->
   <!-- master configuration file that specifies all relevant filenames and -->
   <!-- and directories to configure a case -->
@@ -50,6 +59,15 @@
     <group>case_def</group>
     <file>env_case.xml</file>
     <desc>full pathname of case</desc>
+  </entry>
+
+  <entry id="NONLOCAL">
+    <type>logical</type>
+    <valid_values>TRUE,FALSE</valid_values>
+    <default_value>FALSE</default_value>
+    <group>case_def</group>
+    <file>env_case.xml</file>
+    <desc>user is not on the requested machine</desc>
   </entry>
 
   <entry id="CASETOOLS">
@@ -510,7 +528,7 @@
     <default_value>FALSE</default_value>
     <valid_values>TRUE,FALSE</valid_values>
     <file>env_run.xml</file>
-    <desc>Logical to determine whether CESM run has been submitted with the submit script or not</desc>
+    <desc>Logical to determine whether run has been submitted with the submit script or not</desc>
   </entry>
 
  <entry id="JOB_IDS">
@@ -717,11 +735,11 @@
 
   <entry id="COMP_INTERFACE">
     <type>char</type>
-    <valid_values>nuopc,mct</valid_values>
-    <default_value>mct</default_value>
+    <valid_values>nuopc</valid_values>
+    <default_value>nuopc</default_value>
     <group>build_def</group>
     <file>env_build.xml</file>
-    <desc>define component interface</desc>
+    <desc>use NUOPC component interface</desc>
   </entry>
 
   <entry id="USE_ESMF_LIB">
@@ -969,12 +987,39 @@
     <file>env_run.xml</file>
     <desc>
       Determines what ESMF log files (if any) are generated when
-          USE_ESMF_LIB is TRUE.
+	  USE_ESMF_LIB is TRUE.
       ESMF_LOGKIND_SINGLE: Use a single log file, combining messages from
-          all of the PETs. Not supported on some platforms.
+	  all of the PETs. Not supported on some platforms.
       ESMF_LOGKIND_MULTI: Use multiple log files -- one per PET.
       ESMF_LOGKIND_NONE: Do not issue messages to a log file.
       By default, no ESMF log files are generated.
+    </desc>
+  </entry>
+
+  <entry id="ESMF_VERBOSITY_LEVEL">
+    <type>char</type>
+    <valid_values>off,low,high,max</valid_values>
+    <default_value>low</default_value>
+    <group>run_flags</group>
+    <file>env_run.xml</file>
+    <desc>
+      Determines the verbosity level in ESMF log files
+      "off": no verbosity
+      "low": some verbosity
+      "high": more verbosity
+      "max": all lower 16 bits
+      By default, the verbosity level is set to "low"
+    </desc>
+  </entry>
+
+  <entry id="ESMF_PROFILING_LEVEL">
+    <type>char</type>
+    <default_value>0</default_value>
+    <group>run_flags</group>
+    <file>env_run.xml</file>
+    <desc>
+      Determines the profiling level in ESMF log files
+      by default, it is set to 0 (only run method execution timings)
     </desc>
   </entry>
 
@@ -1650,6 +1695,14 @@
     <desc>Machines directory location</desc>
   </entry>
 
+  <entry id="EXTRA_MACHDIR">
+    <type>char</type>
+    <default_value></default_value>
+    <group>case_def</group>
+    <file>env_case.xml</file>
+    <desc>Path to an extra directory containing supplementary machines files</desc>
+  </entry>
+
   <entry id="RUNDIR">
     <type>char</type>
     <default_value>$CIME_OUTPUT_ROOT/$CASE/run</default_value>
@@ -1717,19 +1770,16 @@
 
   <entry id="DIN_LOC_IC">
     <type>char</type>
-    <default_value>$DIN_LOC_ROOT/icfiles/</default_value>
+    <default_value>$DIN_LOC_ROOT/icfiles</default_value>
     <group>run_din</group>
     <file>env_run.xml</file>
     <desc>
-      The root directory of initial conditions for ufsatm.
-      This is usually a shared disk area but can be set to
-      a local area independent of DIN_LOC_ROOT
+      The root directory of transient input data for the selected machine.
+      This is usually a shared disk area.
       Default values for the target machine are in the
       $CIMEROOT/machines/config_machines.xml
-      WARNING: The final directory in this path must be "prod".
     </desc>
   </entry>
-
 
   <entry id="DIN_LOC_ROOT_CLMFORC">
     <type>char</type>
@@ -1975,10 +2025,14 @@
   <entry id="PIO_REARR_COMM_MAX_PEND_REQ_COMP2IO">
     <type>integer</type>
     <valid_values></valid_values>
-    <default_value>0</default_value>
+    <default_value>-2</default_value>
     <group>run_pio</group>
     <file>env_run.xml</file>
-    <desc>pio rearranger communication max pending requests (comp2io) : 0 implies that CIME internally calculates the value ( = max(64, 2 * PIO_NUMTASKS) ), -1 implies no bound on max pending requests </desc>
+    <desc>pio rearranger communication max pending requests (io2comp) :
+       -2 implies that CIME internally calculates the value ( = 64),
+       -1 implies no bound on max pending requests
+	0 implies that MPI_ALLTOALL will be used
+    </desc>
   </entry>
 
   <entry id="PIO_REARR_COMM_ENABLE_HS_COMP2IO">
@@ -2102,15 +2156,15 @@
      be computed based on PIO_NUMTASKS and number of compute tasks
     </desc>
     <values>
-      <value compclass="ATM"></value>
-      <value compclass="CPL"></value>
-      <value compclass="OCN"></value>
-      <value compclass="WAV"></value>
-      <value compclass="GLC"></value>
-      <value compclass="ICE"></value>
-      <value compclass="ROF"></value>
-      <value compclass="LND"></value>
-      <value compclass="ESP"></value>
+      <value compclass="ATM">$MAX_MPITASKS_PER_NODE</value>
+      <value compclass="CPL">$MAX_MPITASKS_PER_NODE</value>
+      <value compclass="OCN">$MAX_MPITASKS_PER_NODE</value>
+      <value compclass="WAV">$MAX_MPITASKS_PER_NODE</value>
+      <value compclass="GLC">$MAX_MPITASKS_PER_NODE</value>
+      <value compclass="ICE">$MAX_MPITASKS_PER_NODE</value>
+      <value compclass="ROF">$MAX_MPITASKS_PER_NODE</value>
+      <value compclass="LND">$MAX_MPITASKS_PER_NODE</value>
+      <value compclass="ESP">$MAX_MPITASKS_PER_NODE</value>
     </values>
   </entry>
 
@@ -2121,16 +2175,15 @@
     <file>env_run.xml</file>
     <desc>pio rearranger choice box=1, subset=2 </desc>
     <values>
-      <value>$PIO_VERSION</value>
-      <value compclass="ATM"></value>
-      <value compclass="CPL"></value>
-      <value compclass="OCN"></value>
-      <value compclass="WAV"></value>
-      <value compclass="GLC"></value>
-      <value compclass="ICE"></value>
-      <value compclass="ROF"></value>
-      <value compclass="LND"></value>
-      <value compclass="ESP"></value>
+      <value compclass="ATM">2</value>
+      <value compclass="CPL">2</value>
+      <value compclass="OCN">2</value>
+      <value compclass="WAV">2</value>
+      <value compclass="GLC">2</value>
+      <value compclass="ICE">2</value>
+      <value compclass="ROF">2</value>
+      <value compclass="LND">2</value>
+      <value compclass="ESP">2</value>
     </values>
   </entry>
 
@@ -2370,15 +2423,6 @@
     <desc>yyyymmdd format, sets coupler snapshot history date (like REST_DATE)</desc>
   </entry>
 
-  <entry id="CPL_DECOMP">
-    <type>integer</type>
-    <valid_values>0,1,2,3,4,5,6</valid_values>
-    <default_value>0</default_value>
-    <group>run_flags</group>
-    <file>env_run.xml</file>
-    <desc>Coupler decomposition option.</desc>
-  </entry>
-
   <entry id="INFO_DBUG">
     <type>integer</type>
     <valid_values>0,1,2,3,4,5,6,7,8,9</valid_values>
@@ -2402,6 +2446,7 @@
       is set to TRUE. Note that is only available on a limited set of
       machines/compilers.</desc>
   </entry>
+
 
   <!-- Prerun/postrun custom script options -->
 
@@ -2539,6 +2584,45 @@
    <group>job_submission</group>
    <file>env_workflow.xml</file>
    <desc>whether the PROJECT value is required on this machine</desc>
+ </entry>
+
+  <!-- ===================================================================== -->
+  <!-- data model force prognostic mode -->
+  <!-- ===================================================================== -->
+
+ <entry id="FORCE_PROGNOSTIC_FOR_DATAMODELS">
+   <type>logical</type>
+   <valid_values>TRUE,FALSE</valid_values>
+   <default_value>FALSE</default_value>
+   <group>data_models</group>
+   <file>env_run.xml</file>
+   <desc>if true, all data models are expected to get input sent back from the mediator</desc>
+ </entry>
+
+  <!-- ===================================================================== -->
+  <!-- write ESMF PET log files even without an error -->
+  <!-- ===================================================================== -->
+
+ <entry id="CREATE_ESMF_PET_FILES">
+   <type>logical</type>
+   <valid_values>TRUE,FALSE</valid_values>
+   <default_value>FALSE</default_value>
+   <group>run_debug</group>
+   <file>env_run.xml</file>
+   <desc>if true, create ESMF PET log files even if there is no error encountered </desc>
+ </entry>
+
+  <!-- ===================================================================== -->
+  <!-- write ESMF PET log files even without an error -->
+  <!-- ===================================================================== -->
+
+ <entry id="ADD_AOFLUX_TO_RUNSEQ">
+   <type>logical</type>
+   <valid_values>TRUE,FALSE</valid_values>
+   <default_value>TRUE</default_value>
+   <group>run_coupling</group>
+   <file>env_run.xml</file>
+   <desc>add aoflux calculation to runseq</desc>
  </entry>
 
  <help>
