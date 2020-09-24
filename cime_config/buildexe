@@ -54,6 +54,11 @@ def _main_func():
         ocn_model = case.get_value("COMP_OCN")
         gmake_args = get_standard_makefile_args(case)
 
+    components = active_components(case)
+    coupledApp = False
+    if len(components) > 1:
+        coupledApp = True
+
     if ocn_model == 'mom' or atm_model == "ufsatm":
         gmake_args += "USE_FMS=TRUE"
 
@@ -115,18 +120,25 @@ def _main_func():
     logger.info("NEMS SRCDIR: {}".format(nemssrcdir))
     with open(os.path.join(bld_root,'Filepath'), 'w') as out:
         out.write(os.path.join(caseroot, "SourceMods", "src.drv") + "\n")
-        out.write(os.path.join(srcroot,"src","model","CMEPS","mediator")+"\n")
+        if coupledApp:
+            out.write(os.path.join(srcroot,"src","model","CMEPS","mediator")+"\n")
         out.write(nemssrcdir + "\n")
         out.write(os.path.join(nemssrcdir,"ENS_Cpl")+"\n")
     
     sfiles = glob.glob(nemssrcdir+"/*.F90")
-    sfiles.extend(glob.glob(os.path.join(srcroot,"src","model","CMEPS","mediator")+"/*.F90"))
+    if coupledApp:
+        sfiles.extend(glob.glob(os.path.join(srcroot,"src","model","CMEPS","mediator")+"/*.F90"))
     sfiles.append("ENS_CplComp_ESMFMod_STUB.F90")
     with open(os.path.join(bld_root,'Srcfiles'), 'w') as out:
         out.write("nems_c_rusage.c\n")
         for sfile in sfiles:
             sfile = os.path.basename(sfile)
-            if not "MEDIATOR" in sfile or "SpaceWeather" in sfile:
+            # Remove NEMS mediator files if it is a coupled application (uses CMEPS)
+            if coupledApp:
+                if not "MEDIATOR" in sfile or "SpaceWeather" in sfile:
+                    out.write(sfile+"\n")
+            # Standalone configurations that uses NEMS driver still requires building NEMS mediator files
+            else:
                 out.write(sfile+"\n")
 
     for hfile in glob.iglob(nemssrcdir+"/*.h"):
@@ -148,15 +160,13 @@ def _main_func():
         os.remove(exename)
 
     # Update CPP defs based on the activated components
-    components = active_components(case)
     gmake_args += " USER_CPPDEFS=\""
 
     # Add mediator if there are at least two component
-    #if len(components) > 1:
-    #    gmake_args += "-DCMEPS -DINTERNAL_PIO_INIT -DFRONT_CMEPS=MED "
-    gmake_args += "-DCMEPS -DINTERNAL_PIO_INIT -DFRONT_CMEPS=MED "
+    if coupledApp:
+        gmake_args += "-DCMEPS -DINTERNAL_PIO_INIT -DFRONT_CMEPS=MED "
 
-    # Add model components
+    # Add model component specific preprocessor flags
     if any('ufsatm' in x for x in components):
         gmake_args += "-DFRONT_FV3=fv3gfs_cap_mod "
     if any('MOM' in x for x in components):
