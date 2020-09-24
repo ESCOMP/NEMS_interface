@@ -319,8 +319,8 @@ def buildnml(case, caseroot, component):
         os.makedirs(confdir)
 
     # Path for namelist files
-    srcroot = case.get_value("SRCROOT")
-    namelist_xml_dir = os.path.join(srcroot,"src","model","NEMS","cime","cime_config")
+    nemsdir = case.get_value("COMP_ROOT_DIR_CPL")
+    namelist_xml_dir = os.path.join(nemsdir,"cime_config")
 
     # Set namelist definition file
     definition_file = [os.path.join(namelist_xml_dir, "namelist_definition_drv.xml")]
@@ -364,8 +364,7 @@ def buildnml(case, caseroot, component):
         filename = os.path.join(fd_dir,"fd_nems.yaml")
         safe_copy(filename, os.path.join(rundir, "fd_nems.yaml"))
     else:
-        print coupling_mode
-        expect(False, "coupling mode currently only supports cesm, hafs and nems")
+        expect(False, "coupling mode {} not in (cesm, hafs and nems)".format(coupling_mode))
 
     # Copy drv_in to rundir
     safe_copy(os.path.join(confdir,"drv_in"), os.path.join(rundir,"drv_in"))
