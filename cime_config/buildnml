@@ -49,8 +49,8 @@ def index_containing_substring(the_list, substring):
 def prep_input(case, casedocsdir, nmlgen):
 ###############################################################################
 
+    # TODO: implement input data handling for S2S app
     mesh_ice = nmlgen.get_value("mesh_ice")
-    print mesh_ice
 
 ###############################################################################
 def _create_drv_namelists(case, infile, confdir, nmlgen):
@@ -82,17 +82,35 @@ def _create_drv_namelists(case, infile, confdir, nmlgen):
     # (2) Write nems.configure file and add to input dataset list.
     #--------------------------------
 
-    rootpe = case.get_value('ROOTPE_ATM')
-    ntasks = case.get_value('NTASKS_ATM')
-    nmlgen.set_value('ATM_petlist_bounds', '{} {}'.format(rootpe, (rootpe+ntasks)-1))
+    # Get active components
+    components = active_components(case)
 
-    rootpe = case.get_value('ROOTPE_OCN')
-    ntasks = case.get_value('NTASKS_OCN')
-    nmlgen.set_value('OCN_petlist_bounds', '{} {}'.format(rootpe, (rootpe+ntasks)-1))
+    comp_str = ""
+    if len(components) > 1:
+        comp_str += "MED"
 
-    rootpe = case.get_value('ROOTPE_ICE')
-    ntasks = case.get_value('NTASKS_ICE')
-    nmlgen.set_value('ICE_petlist_bounds', '{} {}'.format(rootpe, (rootpe+ntasks)-1))
+    if any('ufsatm' in x for x in components):
+        rootpe = case.get_value('ROOTPE_ATM')
+        ntasks = case.get_value('NTASKS_ATM')
+        nmlgen.set_value('ATM_petlist_bounds', '{} {}'.format(rootpe, (rootpe+ntasks)-1))
+        nmlgen.set_value('ATM_model', 'fv3')
+        comp_str += " ATM"
+
+    if any('MOM' in x for x in components):
+        rootpe = case.get_value('ROOTPE_OCN')
+        ntasks = case.get_value('NTASKS_OCN')
+        nmlgen.set_value('OCN_petlist_bounds', '{} {}'.format(rootpe, (rootpe+ntasks)-1))
+        nmlgen.set_value('OCN_model', 'mom6')
+        comp_str += " OCN"
+
+    if any('CICE' in x for x in components):
+        rootpe = case.get_value('ROOTPE_ICE')
+        ntasks = case.get_value('NTASKS_ICE')
+        nmlgen.set_value('ICE_petlist_bounds', '{} {}'.format(rootpe, (rootpe+ntasks)-1))
+        nmlgen.set_value('ICE_model', 'cice6')
+        comp_str += " ICE"
+
+    nmlgen.set_value('EARTH_component_list', comp_str)
 
     nuopc_config_file = os.path.join(confdir, "nems.configure")
     if os.path.isfile(nuopc_config_file):
@@ -117,10 +135,26 @@ def _create_drv_namelists(case, infile, confdir, nmlgen):
     # Sort list
     lines_new.sort()
 
+    # Remove entries
+    lines_new_no_stub = lines_new[:]
+    compset = case.get_value("COMPSET")
+    stubcomp = compset.split("_")[1:]
+    stubcomp = [ x for x in stubcomp if "S" in x[0] ]
+    for line in lines_new:
+        for comp in stubcomp:
+            # Remove entries for stub components
+            if comp[1:] in line and line in lines_new_no_stub:
+                lines_new_no_stub.remove(line)
+            # Remove entries if it is not coupled with mediator
+            if len(components) == 1:
+                for e in ["ALLCOMP", "MED"]:
+                    if e in line and line in lines_new_no_stub:
+                        lines_new_no_stub.remove(line)
+
     # Overwrite nems.configure
     if os.path.isfile(nuopc_config_file):
         with open(nuopc_config_file, 'w') as nems_configure:
-            for line in lines_new:
+            for line in lines_new_no_stub:
                 nems_configure.write(line)
             nems_configure.close()
 
@@ -128,7 +162,7 @@ def _create_drv_namelists(case, infile, confdir, nmlgen):
     # (4) Add NUOPC runseq to nems.configure
     #--------------------------------
 
-    _create_runseq(case, nuopc_config_file)
+    _create_runseq(case, nuopc_config_file, nmlgen)
 
     #--------------------------------
     # (5) Write namelist file drv_in
@@ -138,7 +172,7 @@ def _create_drv_namelists(case, infile, confdir, nmlgen):
     nmlgen.write_output_file(namelist_file, data_list_path=data_list_path, groups=drv_namelist_groups)
 
 ###############################################################################
-def _create_runseq(case, nuopc_config_file):
+def _create_runseq(case, nuopc_config_file, nmlgen):
 ###############################################################################
 
     cpl_add_aoflux = case.get_value('ADD_AOFLUX_TO_RUNSEQ')
@@ -186,23 +220,24 @@ def _create_runseq(case, nuopc_config_file):
             coupling_times[comp.lower() + '_cpl_dt'] = cpl_dt
             mindt = min(mindt, cpl_dt)
 
-    # Get coupling timesteps
-    atm_cpl_dt = coupling_times["atm_cpl_dt"]
-    ocn_cpl_dt = coupling_times["ocn_cpl_dt"]
 
     # Append run sequence to nems.configure
     ncomp = len(components)
 
     if os.path.isfile(nuopc_config_file):
         with open(nuopc_config_file, 'a') as nems_configure:
-            # Standalone ATM
-            if ncomp == 1 and atm_here:
-                nems_configure.write("runSeq::                                \n")
-                nems_configure.write("   ATM                                  \n")
-                nems_configure.write("::                                      \n")
+            # Standalone component
+            if ncomp == 1:
+                nems_configure.write("runSeq:: \n")
+                nems_configure.write("   {}    \n".format(nmlgen.get_value('EARTH_component_list').strip()))
+                nems_configure.write("::       \n")
                 nems_configure.close()
             # Coupled ATM-OCN-ICE
             elif ncomp == 3:
+                # Get coupling timesteps
+                atm_cpl_dt = coupling_times["atm_cpl_dt"]
+                ocn_cpl_dt = coupling_times["ocn_cpl_dt"]
+
                 # Warm start
                 if case.get_value("CONTINUE_RUN") or case.get_value("MEDIATOR_READ_RESTART"):
                     logger.info("NUOPC run sequence: warm start (concurrent)")
@@ -329,6 +364,7 @@ def buildnml(case, caseroot, component):
         filename = os.path.join(fd_dir,"fd_nems.yaml")
         shutil.copy(filename, os.path.join(rundir, "fd_nems.yaml"))
     else:
+        print coupling_mode
         expect(False, "coupling mode currently only supports cesm, hafs and nems")
 
     # Copy drv_in to rundir

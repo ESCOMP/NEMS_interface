@@ -22,6 +22,17 @@ from CIME.utils            import expect, run_cmd, safe_copy, symlink_force
 #pylint: disable=undefined-variable
 logger = logging.getLogger(__name__)
 
+# returns active components
+def active_components(case):
+    # query compset
+    compset = case.get_value("COMPSET")
+    # parse compset
+    components = compset.split("_")[1:]
+    # remove stub components
+    components = [ x for x in components if "S" not in x[0] ]
+
+    return components
+
 ###############################################################################
 def _main_func():
 ###############################################################################
@@ -39,29 +50,42 @@ def _main_func():
         gmake_j   = case.get_value("GMAKE_J")
         cime_model     = case.get_value("MODEL")
         num_esp   = case.get_value("NUM_COMP_INST_ESP")
-        ocn_model = case.get_value("COMP_OCN")
         atm_model = case.get_value("COMP_ATM")
+        ocn_model = case.get_value("COMP_OCN")
         gmake_args = get_standard_makefile_args(case)
 
     if ocn_model == 'mom' or atm_model == "ufsatm":
         gmake_args += "USE_FMS=TRUE"
 
-    #    ncep_libs = os.environ.get("NCEP_LIBS")
-    #    if ncep_libs is not None:
     if atm_model == "ufsatm":
-        #            gmake_args += " USER_SLIBS=\"-L{} {}\" ".format(os.path.join(ncep_libs,"lib"), "-lnemsio -lbacio -lsp -lw3emc -lw3nco")
         gmake_args += " USER_INCLDIR=-I{} ".format(os.path.join(exeroot,"atm","obj","FV3","mod"))
         gmake_args += "USER_SLIBS=\""
-        gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","FV3")," -lfv3atm -lfv3dycore ")
-        gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","FV3","cpl")," -lcpl ")
-        gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","FV3","io")," -lio ")
-        gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","FV3","ipd")," -lipd ")
-        gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","FV3","gfsphysics")," -lgfsphysics ")
-        gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","FV3","stochastic_physics")," -lstochastic_physics_wrapper ")
-        gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","stochastic_physics")," -lstochastic_physics ")
-        gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","FV3","ccpp","driver")," -lccppdriver ")
-        gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","FV3","ccpp","physics")," -lccppphys ")
-        gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","FV3","ccpp","framework","src")," -lccpp ")
+
+        fv3_path = os.path.join(exeroot,"atm","obj","FV3")
+        if os.path.isfile(os.path.join(fv3_path,"libfv3atm.a")):
+            gmake_args += " -L{} {} ".format(fv3_path," -lfv3atm -lfv3dycore ")
+        elif os.path.isfile(os.path.join(fv3_path,"libfv3cap.a")):
+            gmake_args += " -L{} {} ".format(fv3_path," -lfv3cap -lfv3core ")
+
+        if os.path.isfile(os.path.join(fv3_path,"cpl","libcpl.a")):
+            gmake_args += " -L{} {} ".format(os.path.join(fv3_path,"cpl")," -lcpl ")
+        elif os.path.isfile(os.path.join(fv3_path,"cpl","libfv3cpl.a")):
+            gmake_args += " -L{} {} ".format(os.path.join(fv3_path,"cpl")," -lfv3cpl ")
+
+        gmake_args += " -L{} {} ".format(os.path.join(fv3_path,"io")," -lio ")
+        gmake_args += " -L{} {} ".format(os.path.join(fv3_path,"ipd")," -lipd ")
+        gmake_args += " -L{} {} ".format(os.path.join(fv3_path,"gfsphysics")," -lgfsphysics ")
+
+        sp_path = os.path.join(fv3_path,"stochastic_physics")
+        if os.path.isfile(os.path.join(sp_path,"libstochastic_physics_wrapper.a")):
+            gmake_args += " -L{} {} ".format(sp_path," -lstochastic_physics_wrapper ")
+            gmake_args += " -L{} {} ".format(os.path.join(exeroot,"atm","obj","stochastic_physics")," -lstochastic_physics ")
+        elif os.path.isfile(os.path.join(sp_path,"libstochastic_physics.a")):
+            gmake_args += " -L{} {} ".format(sp_path," -lstochastic_physics ")
+
+        gmake_args += " -L{} {} ".format(os.path.join(fv3_path,"ccpp","driver")," -lccppdriver ")
+        gmake_args += " -L{} {} ".format(os.path.join(fv3_path,"ccpp","physics")," -lccppphys ")
+        gmake_args += " -L{} {} ".format(os.path.join(fv3_path,"ccpp","framework","src")," -lccpp ")
         gmake_args +=     os.environ.get("NEMSIO_LIB")
         gmake_args += " "+os.environ.get("BACIO_LIB4")
         gmake_args += " "+os.environ.get("W3EMC_LIBd")
@@ -75,11 +99,11 @@ def _main_func():
         safe_copy(os.path.join(exeroot,"atm","obj","NEMS.exe"),os.path.join(exeroot,"ufs.exe"))
         return
 
-    for comp in comp_classes:
-        model = case.get_value("COMP_{}".format(comp))
-        stubcomp = "s{}".format(comp.lower())
-        if model == stubcomp:
-            gmake_args += " {}_PRESENT=FALSE".format(comp)
+    compset = case.get_value("COMPSET")
+    stubcomp = compset.split("_")[1:]
+    stubcomp = [ x for x in stubcomp if "S" in x[0] ]
+    for comp in stubcomp:
+        gmake_args += " {}_PRESENT=FALSE".format(comp[1:])
     gmake_args += " IAC_PRESENT=FALSE"
     expect((num_esp is None) or (int(num_esp) == 1), "ESP component restricted to one instance")
 
@@ -87,7 +111,8 @@ def _main_func():
     if not os.path.isdir(bld_root):
         os.makedirs(bld_root)
 
-    nemssrcdir = os.path.join(srcroot, "src", "model", "NEMS", "src") 
+    nemssrcdir = os.path.join(case.get_value("COMP_ROOT_DIR_CPL"),os.pardir,"src")
+    logger.info("NEMS SRCDIR: {}".format(nemssrcdir))
     with open(os.path.join(bld_root,'Filepath'), 'w') as out:
         out.write(os.path.join(caseroot, "SourceMods", "src.drv") + "\n")
         out.write(os.path.join(srcroot,"src","model","CMEPS","mediator")+"\n")
@@ -96,7 +121,6 @@ def _main_func():
     
     sfiles = glob.glob(nemssrcdir+"/*.F90")
     sfiles.extend(glob.glob(os.path.join(srcroot,"src","model","CMEPS","mediator")+"/*.F90"))
-    #sfiles.append("nems_c_rusage.c")
     sfiles.append("ENS_CplComp_ESMFMod_STUB.F90")
     with open(os.path.join(bld_root,'Srcfiles'), 'w') as out:
         out.write("nems_c_rusage.c\n")
@@ -106,7 +130,7 @@ def _main_func():
                 out.write(sfile+"\n")
 
     for hfile in glob.iglob(nemssrcdir+"/*.h"):
-        print("Creating link to {}".format(hfile))
+        logger.info("Creating link to {}".format(hfile))
         if "ESMFVersionDefine" in hfile:
             symlink_force(hfile, os.path.join(bld_root,"ESMFVersionDefine.h"))
             symlink_force(hfile, os.path.join(bld_root,os.pardir,"ESMFVersionDefine.h"))
@@ -122,7 +146,27 @@ def _main_func():
     # Always relink
     if os.path.isfile(exename):
         os.remove(exename)
-    gmake_args += " USER_CPPDEFS=\"-DCMEPS -DINTERNAL_PIO_INIT -DFRONT_CMEPS=MED -DFRONT_CICE6=ice_comp_nuopc -DFRONT_MOM6=mom_cap_mod -DFRONT_FV3=fv3gfs_cap_mod\""
+
+    # Update CPP defs based on the activated components
+    components = active_components(case)
+    gmake_args += " USER_CPPDEFS=\""
+
+    # Add mediator if there are at least two component
+    #if len(components) > 1:
+    #    gmake_args += "-DCMEPS -DINTERNAL_PIO_INIT -DFRONT_CMEPS=MED "
+    gmake_args += "-DCMEPS -DINTERNAL_PIO_INIT -DFRONT_CMEPS=MED "
+
+    # Add model components
+    if any('ufsatm' in x for x in components):
+        gmake_args += "-DFRONT_FV3=fv3gfs_cap_mod "
+    if any('MOM' in x for x in components):
+        gmake_args += "-DFRONT_MOM6=mom_cap_mod "
+    if any('CICE' in x for x in components):
+        gmake_args += "-DFRONT_CICE6=ice_comp_nuopc "
+    gmake_args += "\""
+
+    logger.info("GMAKE_ARGS: {}".format(gmake_args))
+
     # Build model executable
     cmd = "{} exec_se -j {} EXEC_SE={} MODEL=driver {} -f {} ".format(gmake, gmake_j, exename, gmake_args, makefile)
     rc, out, err = run_cmd(cmd, from_dir=bld_root)
