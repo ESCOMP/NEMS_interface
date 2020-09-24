@@ -9,7 +9,7 @@
 # Disable these because this is our standard setup
 # pylint: disable=wildcard-import,unused-wildcard-import,wrong-import-position
 
-import os, sys, copy, shutil
+import os, sys, copy
 
 CIMEROOT = os.environ.get("CIMEROOT")
 if CIMEROOT is None:
@@ -344,7 +344,7 @@ def buildnml(case, caseroot, component):
     rundir = case.get_value("RUNDIR")
 
     # Copy nuopc.runconfig to rundir
-    shutil.copy(os.path.join(confdir,"nems.configure"), rundir)
+    safe_copy(os.path.join(confdir,"nems.configure"), os.path.join(rundir,"nems.configure"))
 
     # Prepare input
     prep_input(case, casedocsdir, nmlgen)
@@ -359,17 +359,17 @@ def buildnml(case, caseroot, component):
     coupling_mode = case.get_value('COUPLING_MODE')
     if coupling_mode == 'hafs':
         filename = os.path.join(fd_dir,"fd_hafs.yaml")
-        shutil.copy(filename, os.path.join(rundir, "fd.yaml"))
+        safe_copy(filename, os.path.join(rundir, "fd.yaml"))
     elif 'nems' in coupling_mode:
         filename = os.path.join(fd_dir,"fd_nems.yaml")
-        shutil.copy(filename, os.path.join(rundir, "fd_nems.yaml"))
+        safe_copy(filename, os.path.join(rundir, "fd_nems.yaml"))
     else:
         print coupling_mode
         expect(False, "coupling mode currently only supports cesm, hafs and nems")
 
     # Copy drv_in to rundir
-    shutil.copy(os.path.join(confdir,"drv_in"), rundir)
-    shutil.copy(os.path.join(confdir,"drv_in"), os.path.join(rundir,"pio_in"))
+    safe_copy(os.path.join(confdir,"drv_in"), os.path.join(rundir,"drv_in"))
+    safe_copy(os.path.join(confdir,"drv_in"), os.path.join(rundir,"pio_in"))
 
 ###############################################################################
 def _main_func():
